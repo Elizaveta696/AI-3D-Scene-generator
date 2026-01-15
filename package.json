@@ -1,0 +1,31 @@
+{
+  "name": "ai-3d-scene-generator",
+  "version": "1.0.0",
+  "description": "AI-powered 3D scene generator using OpenAI and Three.js",
+  "type": "module",
+  "author": "Elizaveta696",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Elizaveta696/ai-3d-scene-generator"
+  },
+  "keywords": [
+    "3d",
+    "openai",
+    "threejs",
+    "scene-generator",
+    "ai",
+    "gpt"
+  ],
+  "scripts": {
+    "serve": "python server.py",
+    "start": "python server.py"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

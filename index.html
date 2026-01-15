@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 3D Scene Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #2a2a2a 0%, #383838 100%);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #container {
+            display: flex;
+            height: 100vh;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        #canvas-container {
+            flex: 1;
+            min-width: 50%;
+            background: #383838;
+            border-radius: 12px;
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+
+        #control-panel {
+            width: 45%;
+            background: #f5f5f5;
+            border-radius: 12px;
+            padding: 35px;
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            overflow-y: auto;
+        }
+
+        h1 {
+            font-size: 32px;
+            color: #000000;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        p {
+            color: #666666;
+            font-size: 14px;
+            font-weight: 300;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            color: #222222;
+            margin-bottom: 12px;
+            font-size: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        #sceneDescription {
+            width: 100%;
+            height: 150px;
+            padding: 15px;
+            border: 2px solid #cccccc;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: 'Poppins', sans-serif;
+            resize: vertical;
+            transition: all 0.3s;
+            background: #ffffff;
+            color: #333333;
+        }
+
+        #sceneDescription:focus {
+            outline: none;
+            border-color: #333333;
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+        }
+
+        button {
+            padding: 14px 24px;
+            background: #000000;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Poppins', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        button:hover {
+            background: #222222;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: #666666;
+        }
+
+        #status {
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            background: #e8e8e8;
+            color: #333333;
+            font-weight: 500;
+        }
+
+        #status.loading {
+            background: #d9d9d9;
+            color: #222222;
+        }
+
+        #status.success {
+            background: #e0e0e0;
+            color: #000000;
+        }
+
+        #status.error {
+            background: #d0d0d0;
+            color: #333333;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            margin-right: 10px;
+            border: 3px solid #cccccc;
+            border-top: 3px solid #333333;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #objectsList {
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 220px;
+            overflow-y: auto;
+            font-size: 14px;
+        }
+
+        .object-item {
+            padding: 8px 0;
+            color: #444444;
+            border-bottom: 1px solid #f0f0f0;
+            font-weight: 500;
+        }
+
+        .object-item:last-child {
+            border-bottom: none;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        .button-group button {
+            flex: 1;
+            padding: 12px;
+            font-size: 14px;
+        }
+
+        @media (max-width: 1200px) {
+            #container {
+                flex-direction: column;
+            }
+
+            #control-panel {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container"></div>
+        <div id="control-panel">
+            <div>
+                <h1>3D Scene Generator</h1>
+                <p>Describe your scene and let AI create it</p>
+            </div>
+
+            <div>
+                <label for="sceneDescription">Describe Your Scene</label>
+                <textarea 
+                    id="sceneDescription" 
+                    placeholder="E.g., A large red planet with 2 white moons and a yellow sun, mountains on surface...">
+                </textarea>
+            </div>
+
+            <button id="generateBtn">Generate Scene</button>
+
+            <div id="status">Ready</div>
+
+            <div>
+                <label>Generated Objects</label>
+                <div id="objectsList"></div>
+            </div>
+
+            <div class="button-group">
+                <button id="resetBtn">Reset</button>
+                <button id="exportBtn">Export</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="env.loader.js"></script>
+    <script src="config.js"></script>
+    <script src="Trees.js"></script>
+    <script src="SceneGenerator.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
