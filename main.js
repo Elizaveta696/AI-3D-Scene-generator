@@ -22,7 +22,6 @@ class App {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFShadowShadowMap;
         document.getElementById('canvas-container').appendChild(this.renderer.domElement);
-
         // Lighting
         this.setupLights();
 
@@ -31,6 +30,9 @@ class App {
         this.currentObjects = [];
         this.sceneGroup = new THREE.Group(); // Group for rotating all objects together
         this.scene.add(this.sceneGroup);
+
+        // Initialize anatomy system for character assembly
+        this.anatomy = this.createAnatomy();
 
         // Mouse controls for scene rotation
         this.setupMouseControls();
@@ -46,6 +48,118 @@ class App {
 
         // Initialize with API key from .env
         this.initializeWithEnvKey();
+
+        // Setup global scale controls
+        this.setupScaleControls();
+    }
+
+    /**
+     * Create the anatomy system for character assembly
+     * Maps body parts to their hierarchical relationships
+     */
+    createAnatomy() {
+        return {
+            bodies: {}, // Map of body ID to body parts
+            attachmentRules: {
+                'head': { parent: 'scene', offsetY: 1.2 },
+                'torso': { parent: 'scene', offsetY: 0.4 },
+                'legs': { parent: 'torso', offsetY: -0.8 },
+                'arms': { parent: 'torso', offsetY: 0.5 }
+            },
+            clothing: {} // Map of clothing to attachment rules
+        };
+    }
+
+    /**
+     * Track an object in the anatomy system
+     * @param {string} bodyId - Unique identifier for the character
+     * @param {string} partName - head, torso, legs, etc.
+     * @param {THREE.Mesh} mesh - The Three.js mesh for this part
+     */
+    registerBodyPart(bodyId, partName, mesh) {
+        if (!this.anatomy.bodies[bodyId]) {
+            this.anatomy.bodies[bodyId] = {};
+        }
+        this.anatomy.bodies[bodyId][partName] = {
+            mesh: mesh,
+            children: [] // Objects attached to this part
+        };
+    }
+
+    /**
+     * Register multiple body parts for a complex model like human
+     * Automatically creates head, torso, legs parts with proper offsets
+     */
+    registerHumanBodyParts(bodyId, humanMesh, scale = 1) {
+        if (!this.anatomy.bodies[bodyId]) {
+            this.anatomy.bodies[bodyId] = {};
+        }
+        
+        // Create virtual body parts for human anatomy
+        // Head is 1.2 units above torso
+        const headGroup = new THREE.Group();
+        headGroup.position.copy(humanMesh.position);
+        headGroup.position.y += 1.2 * scale;
+        
+        const torsoGroup = new THREE.Group();
+        torsoGroup.position.copy(humanMesh.position);
+        torsoGroup.position.y += 0.4 * scale;
+        
+        const legsGroup = new THREE.Group();
+        legsGroup.position.copy(humanMesh.position);
+        legsGroup.position.y -= 0.3 * scale;
+        
+        this.anatomy.bodies[bodyId]['head'] = {
+            mesh: headGroup,
+            children: [],
+            offset: { x: 0, y: 1.2 * scale, z: 0 }
+        };
+        this.anatomy.bodies[bodyId]['torso'] = {
+            mesh: torsoGroup,
+            children: [],
+            offset: { x: 0, y: 0.4 * scale, z: 0 }
+        };
+        this.anatomy.bodies[bodyId]['legs'] = {
+            mesh: legsGroup,
+            children: [],
+            offset: { x: 0, y: -0.3 * scale, z: 0 }
+        };
+    }
+
+    /**
+     * Attach an object (clothing, accessory) to a body part
+     * Handles relative positioning and scaling
+     */
+    attachToBodyPart(bodyId, attachToPoint, clothingMesh, options = {}) {
+        const bodyParts = this.anatomy.bodies[bodyId];
+        if (!bodyParts || !bodyParts[attachToPoint]) {
+            console.warn(`Body part not found: ${attachToPoint}, treating as scene object`);
+            return false;
+        }
+
+        const parentPart = bodyParts[attachToPoint];
+        const scale_multiplier = options.scale_multiplier || 1.0;
+        const offset = options.offset || { x: 0, y: 0, z: 0 };
+
+        // Scale clothing relative to body part
+        if (clothingMesh.scale) {
+            clothingMesh.scale.multiplyScalar(scale_multiplier);
+        }
+
+        // Position relative to parent with z-fighting offset
+        clothingMesh.position.copy(parentPart.mesh.position);
+        clothingMesh.position.x += offset.x;
+        clothingMesh.position.y += offset.y;
+        clothingMesh.position.z += offset.z + 0.05; // Slight z-offset to avoid z-fighting
+
+        // Add to parent's children list
+        parentPart.children.push({
+            mesh: clothingMesh,
+            offset: offset,
+            scale_multiplier: scale_multiplier
+        });
+
+        return true;
     }
 
     setupLights() {
@@ -107,6 +221,23 @@ class App {
         });
     }
 
+    setupScaleControls() {
+        const scaleDownBtn = document.getElementById('scaleDownBtn');
+        const scaleUpBtn = document.getElementById('scaleUpBtn');
+
+        if (scaleDownBtn) {
+            scaleDownBtn.addEventListener('click', () => {
+                this.scaleAllObjects(0.9);
+            });
+        }
+
+        if (scaleUpBtn) {
+            scaleUpBtn.addEventListener('click', () => {
+                this.scaleAllObjects(1.1);
+            });
+        }
+    }
+
     initializeWithEnvKey() {
         if (this.sceneGenerator.hasApiKey()) {
             this.updateStatus('API key loaded from .env file ✓', 'success');
@@ -143,6 +274,13 @@ class App {
             // Clear existing scene
             this.clearScene();
 
+            // Reset scale to 1.0x
+            this.sceneGroup.scale.set(1, 1, 1);
+            const scaleValueElement = document.getElementById('scaleValue');
+            if (scaleValueElement) {
+                scaleValueElement.textContent = '1.0x';
+            }
+
             // Set background color
             if (sceneData.background) {
                 this.scene.background = new THREE.Color(parseInt(sceneData.background));
@@ -167,129 +305,375 @@ class App {
     }
 
     createObjectsFromData(objectsData) {
+        // First pass: create all body objects and scene-level objects
+        const bodyObjects = new Map(); // Track bodies by ID
+        
         for (const objData of objectsData) {
             try {
-                let mesh;
                 const params = objData.params;
-
-                // Convert color string to number if needed
-                if (typeof params.color === 'string') {
-                    params.color = parseInt(params.color);
-                }
-
-                // Create object based on type
-                switch (objData.type) {
-                    case 'sphere':
-                        mesh = Trees.sphere(params.radius || 2, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'cube':
-                        mesh = Trees.cube(params.width || 2, params.height || 2, params.depth || 2, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'cylinder':
-                        mesh = Trees.cylinder(params.radiusTop || 2, params.radiusBottom || 2, params.height || 4, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'cone':
-                        mesh = Trees.cone(params.radius || 2, params.height || 4, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'torus':
-                        mesh = Trees.torus(params.radius || 3, params.tube || 1, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'plane':
-                        mesh = Trees.plane(params.width || 4, params.height || 4, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'pyramid':
-                        mesh = Trees.pyramid(params.size || 2, params.height || 4, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'tetrahedron':
-                        mesh = Trees.tetrahedron(params.radius || 2, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'octahedron':
-                        mesh = Trees.octahedron(params.radius || 2, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'dodecahedron':
-                        mesh = Trees.dodecahedron(params.radius || 2, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'icosahedron':
-                        mesh = Trees.icosahedron(params.radius || 2, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'lightSphere':
-                        mesh = Trees.lightSphere(params.radius || 3, params.color, params.intensity || 1, params.x, params.y, params.z);
-                        if (mesh.light) {
-                            this.scene.add(mesh.light);
+                
+                // Determine if this is a body, clothing, or scene object
+                const role = objData.role || 'environment';
+                const attachTo = objData.attachTo || 'scene';
+                
+                // Only create scene-level objects in first pass
+                if (attachTo === 'scene') {
+                    let mesh = this.createMesh(objData);
+                    
+                    if (!mesh) continue;
+                    
+                    // Track body objects separately
+                    if (role === 'body') {
+                        if (!bodyObjects.has(objData.name)) {
+                            bodyObjects.set(objData.name, {
+                                mesh: mesh,
+                                data: objData
+                            });
                         }
-                        break;
-                    case 'ring':
-                        mesh = Trees.ring(params.innerRadius || 2, params.outerRadius || 4, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'vase':
-                        mesh = Trees.vase(params.scale || 2, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'capsule':
-                        mesh = Trees.capsule(params.radius || 1, params.length || 4, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'disk':
-                        mesh = Trees.disk(params.radius || 2, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'prism':
-                        mesh = Trees.prism(params.radius || 2, params.height || 4, params.sides || 6, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'wedge':
-                        mesh = Trees.wedge(params.width || 2, params.height || 2, params.depth || 2, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'star':
-                        mesh = Trees.star(params.radius || 2, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'circle':
-                        mesh = Trees.circle(params.radius || 2, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'verticalLine':
-                        mesh = Trees.verticalLine(params.height || 4, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'horizontalLine':
-                        mesh = Trees.horizontalLine(params.length || 4, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'grid':
-                        mesh = Trees.grid(params.size || 10, params.divisions || 10, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'axes':
-                        mesh = Trees.axes(params.size || 5, params.x, params.y, params.z);
-                        break;
-                    case 'tube':
-                        mesh = Trees.tube(params.radius || 2, params.tubeRadius || 0.5, params.height || 4, params.color, params.x, params.y, params.z);
-                        break;
-                    case 'line':
-                        const start = new THREE.Vector3(params.x1 || 0, params.y1 || 0, params.z1 || 0);
-                        const end = new THREE.Vector3(params.x2 || 1, params.y2 || 1, params.z2 || 1);
-                        mesh = Trees.line(start, end, params.color);
-                        break;
-                    default:
-                        console.warn(`Unknown object type: ${objData.type}`);
-                        continue;
+                        // Register body parts based on type
+                        if (objData.type === 'human') {
+                            this.registerHumanBodyParts(objData.name, mesh, params.scale || 1);
+                        } else {
+                            this.registerBodyPart(objData.name, 'torso', mesh);
+                        }
+                        // Add to scene
+                        this.sceneGroup.add(mesh);
+                        this.currentObjects.push(mesh);
+                    }
                 }
-
+            } catch (error) {
+                console.error(`Error creating object ${objData.type}:`, error);
+            }
+        }
+        
+        // Second pass: attach clothing and accessories to body parts
+        for (const objData of objectsData) {
+            try {
+                const attachTo = objData.attachTo || 'scene';
+                
+                // Skip scene-level objects
+                if (attachTo === 'scene') continue;
+                
+                // Create clothing/accessory mesh
+                let mesh = this.createMesh(objData);
+                if (!mesh) continue;
+                
+                // Find the parent body
+                let parentBodyId = null;
+                for (const [bodyId, bodyParts] of Object.entries(this.anatomy.bodies)) {
+                    if (bodyParts[attachTo]) {
+                        parentBodyId = bodyId;
+                        break;
+                    }
+                }
+                
+                if (!parentBodyId) {
+                    console.warn(`Could not find body part "${attachTo}" for ${objData.name}, treating as scene object`);
+                    this.sceneGroup.add(mesh);
+                    this.currentObjects.push(mesh);
+                    continue;
+                }
+                
+                // Attach to body part with relative positioning
+                const attachmentOptions = {
+                    scale_multiplier: objData.scale_multiplier || 1.0,
+                    offset: objData.offset || { x: 0, y: 0, z: 0 }
+                };
+                
+                this.attachToBodyPart(parentBodyId, attachTo, mesh, attachmentOptions);
+                
                 mesh.userData.name = objData.name || objData.type;
-                // Store animation data if present
                 if (objData.animation) {
                     mesh.userData.animation = objData.animation;
                 }
                 this.sceneGroup.add(mesh);
                 this.currentObjects.push(mesh);
-
+                
             } catch (error) {
-                console.error(`Error creating object ${objData.type}:`, error);
+                console.error(`Error attaching ${objData.type}:`, error);
             }
         }
+    }
+
+    /**
+     * Create a mesh from object data
+     * Handles all shape types and returns the appropriate Three.js mesh
+     */
+    createMesh(objData) {
+        let mesh;
+        const params = objData.params;
+        
+        // Convert color string to number if needed
+        if (typeof params.color === 'string') {
+            params.color = parseInt(params.color);
+        }
+        
+        // Get position - use 0 if not specified since relative positioning is handled separately
+        const x = params.x || 0;
+        const y = params.y || 0;
+        const z = params.z || 0;
+        
+        // Create mesh based on type
+        switch (objData.type) {
+            case 'sphere':
+                mesh = Trees.sphere(params.radius || 2, params.color, x, y, z);
+                break;
+            case 'cube':
+                mesh = Trees.cube(params.width || 2, params.height || 2, params.depth || 2, params.color, x, y, z);
+                break;
+            case 'cylinder':
+                mesh = Trees.cylinder(params.radiusTop || 2, params.radiusBottom || 2, params.height || 4, params.color, x, y, z);
+                break;
+            case 'cone':
+                mesh = Trees.cone(params.radius || 2, params.height || 4, params.color, x, y, z);
+                break;
+            case 'torus':
+                mesh = Trees.torus(params.radius || 3, params.tube || 1, params.color, x, y, z);
+                break;
+            case 'plane':
+                mesh = Trees.plane(params.width || 4, params.height || 4, params.color, x, y, z);
+                break;
+            case 'pyramid':
+                mesh = Trees.pyramid(params.size || 2, params.height || 4, params.color, x, y, z);
+                break;
+            case 'tetrahedron':
+                mesh = Trees.tetrahedron(params.radius || 2, params.color, x, y, z);
+                break;
+            case 'octahedron':
+                mesh = Trees.octahedron(params.radius || 2, params.color, x, y, z);
+                break;
+            case 'dodecahedron':
+                mesh = Trees.dodecahedron(params.radius || 2, params.color, x, y, z);
+                break;
+            case 'icosahedron':
+                mesh = Trees.icosahedron(params.radius || 2, params.color, x, y, z);
+                break;
+            case 'lightSphere':
+                mesh = Trees.lightSphere(params.radius || 3, params.color, params.intensity || 1, x, y, z);
+                if (mesh.light) {
+                    this.scene.add(mesh.light);
+                }
+                break;
+            case 'ring':
+                mesh = Trees.ring(params.innerRadius || 2, params.outerRadius || 4, params.color, x, y, z);
+                break;
+            case 'vase':
+                mesh = Trees.vase(params.scale || 2, params.color, x, y, z);
+                break;
+            case 'capsule':
+                mesh = Trees.capsule(params.radius || 1, params.length || 4, params.color, x, y, z);
+                break;
+            case 'disk':
+                mesh = Trees.disk(params.radius || 2, params.color, x, y, z);
+                break;
+            case 'prism':
+                mesh = Trees.prism(params.radius || 2, params.height || 4, params.sides || 6, params.color, x, y, z);
+                break;
+            case 'wedge':
+                mesh = Trees.wedge(params.width || 2, params.height || 2, params.depth || 2, params.color, x, y, z);
+                break;
+            case 'star':
+                mesh = Trees.star(params.radius || 2, params.color, x, y, z);
+                break;
+            case 'circle':
+                mesh = Trees.circle(params.radius || 2, params.color, x, y, z);
+                break;
+            case 'verticalLine':
+                mesh = Trees.verticalLine(params.height || 4, params.color, x, y, z);
+                break;
+            case 'horizontalLine':
+                mesh = Trees.horizontalLine(params.length || 4, params.color, x, y, z);
+                break;
+            case 'grid':
+                mesh = Trees.grid(params.size || 10, params.divisions || 10, params.color, x, y, z);
+                break;
+            case 'axes':
+                mesh = Trees.axes(params.size || 5, x, y, z);
+                break;
+            case 'tube':
+                mesh = Trees.tube(params.radius || 2, params.tubeRadius || 0.5, params.height || 4, params.color, x, y, z);
+                break;
+            case 'human':
+                mesh = Trees.human(params.scale || 1, params.color || 0x999999, x, y, z);
+                break;
+            case 'house':
+                mesh = Trees.house(params.scale || 1, params.color || 0x8B4513, x, y, z);
+                break;
+            case 'tree':
+                mesh = Trees.tree(params.scale || 1, params.color || 0x228B22, x, y, z);
+                break;
+            case 'cloud':
+                mesh = Trees.cloud(params.scale || 1, x, y, z);
+                break;
+            case 'mountain':
+                mesh = Trees.mountain(params.scale || 1, params.color || 0x808080, x, y, z);
+                break;
+            case 'eye':
+                mesh = Trees.eye(params.scale || 1, x, y, z);
+                break;
+            case 'hair':
+                mesh = Trees.hair(params.scale || 1, params.color || 0x8B4513, x, y, z);
+                break;
+            case 'animal':
+                mesh = Trees.animal(params.scale || 1, params.color || 0xFF6B6B, x, y, z);
+                break;
+            case 'line':
+                const start = new THREE.Vector3(params.x1 || 0, params.y1 || 0, params.z1 || 0);
+                const end = new THREE.Vector3(params.x2 || 1, params.y2 || 1, params.z2 || 1);
+                mesh = Trees.line(start, end, params.color);
+                break;
+            default:
+                console.warn(`Unknown object type: ${objData.type}`);
+                return null;
+        }
+        
+        // Store original material properties for transparency toggle
+        if (mesh && mesh.material) {
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            materials.forEach(mat => {
+                if (!mat.userData) mat.userData = {};
+                mat.userData.originalColor = mat.color ? mat.color.clone() : new THREE.Color(0xffffff);
+                mat.userData.originalEmissive = mat.emissive ? mat.emissive.clone() : new THREE.Color(0x000000);
+            });
+        }
+        
+        // Store original properties for children
+        if (mesh && mesh.children) {
+            mesh.traverse(child => {
+                if (child.material) {
+                    const materials = Array.isArray(child.material) ? child.material : [child.material];
+                    materials.forEach(mat => {
+                        if (!mat.userData) mat.userData = {};
+                        mat.userData.originalColor = mat.color ? mat.color.clone() : new THREE.Color(0xffffff);
+                        mat.userData.originalEmissive = mat.emissive ? mat.emissive.clone() : new THREE.Color(0x000000);
+                    });
+                }
+            });
+        }
+        
+        return mesh;
     }
 
     displayObjectsList(objectsData) {
         const listDiv = document.getElementById('objectsList');
         listDiv.innerHTML = '';
 
-        for (const obj of objectsData) {
+        for (let i = 0; i < objectsData.length; i++) {
+            const obj = objectsData[i];
             const item = document.createElement('div');
             item.className = 'object-item';
-            item.textContent = `• ${obj.name || obj.type} (${obj.type})`;
+            
+            const label = document.createElement('span');
+            label.textContent = `• ${obj.name || obj.type} (${obj.type})`;
+            label.style.flex = '1';
+            item.appendChild(label);
+            
+            // Add transparency toggle button
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'toggle-visibility-btn';
+            toggleBtn.textContent = '👁️';
+            toggleBtn.title = 'Toggle transparency';
+            toggleBtn.dataset.objectIndex = i;
+            toggleBtn.style.marginLeft = '8px';
+            toggleBtn.style.padding = '2px 8px';
+            toggleBtn.style.cursor = 'pointer';
+            toggleBtn.style.border = '1px solid #666';
+            toggleBtn.style.background = '#555';
+            toggleBtn.style.color = '#fff';
+            toggleBtn.style.borderRadius = '3px';
+            toggleBtn.style.fontSize = '12px';
+            
+            // Click handler for transparency toggle
+            toggleBtn.addEventListener('click', (e) => {
+                const index = parseInt(e.target.dataset.objectIndex);
+                this.toggleObjectTransparency(index);
+            });
+            
+            item.style.display = 'flex';
+            item.style.alignItems = 'center';
+            item.appendChild(toggleBtn);
             listDiv.appendChild(item);
+        }
+    }
+
+    /**
+     * Scale all objects together
+     * @param {number} scaleFactor - Multiplier (1.1 for bigger, 0.9 for smaller)
+     */
+    scaleAllObjects(scaleFactor) {
+        this.sceneGroup.scale.multiplyScalar(scaleFactor);
+        
+        // Update scale display
+        const newScale = this.sceneGroup.scale.x;
+        const scaleValueElement = document.getElementById('scaleValue');
+        if (scaleValueElement) {
+            scaleValueElement.textContent = newScale.toFixed(2) + 'x';
+        }
+    }
+
+    /**
+     * Toggle visibility state of an object through 3 modes:
+     * normal → transparent → highlighted → normal
+     * @param {number} index - Index in currentObjects array
+     */
+    toggleObjectTransparency(index) {
+        if (index >= 0 && index < this.currentObjects.length) {
+            const mesh = this.currentObjects[index];
+            
+            // Initialize state if not set (0=normal, 1=transparent, 2=highlighted)
+            if (mesh.userData.visibilityState === undefined) {
+                mesh.userData.visibilityState = 0;
+            }
+            
+            // Cycle through states
+            mesh.userData.visibilityState = (mesh.userData.visibilityState + 1) % 3;
+            
+            // Apply state
+            this.setObjectVisibilityState(mesh, mesh.userData.visibilityState);
+        }
+    }
+
+    /**
+     * Set visibility state on mesh and all children
+     * States: 0=normal, 1=transparent, 2=highlighted (bright red with glow)
+     * @param {THREE.Object3D} object - Object to modify
+     * @param {number} state - Visibility state (0-2)
+     */
+    setObjectVisibilityState(object, state) {
+        if (object.material) {
+            const materials = Array.isArray(object.material) ? object.material : [object.material];
+            
+            materials.forEach(mat => {
+                if (state === 0) {
+                    // Normal state
+                    mat.transparent = false;
+                    mat.opacity = 1.0;
+                    mat.emissive.copy(mat.userData.originalEmissive || new THREE.Color(0x000000));
+                    if (mat.color) {
+                        mat.color.copy(mat.userData.originalColor || new THREE.Color(0xffffff));
+                    }
+                } else if (state === 1) {
+                    // Transparent state
+                    mat.transparent = true;
+                    mat.opacity = 0.3;
+                    mat.emissive.copy(mat.userData.originalEmissive || new THREE.Color(0x000000));
+                } else if (state === 2) {
+                    // Highlighted state - bright red glow
+                    mat.transparent = true;
+                    mat.opacity = 0.9;
+                    mat.emissive.set(0xff3333);
+                    if (mat.color) {
+                        mat.color.set(0xff6666);
+                    }
+                }
+            });
+        }
+        
+        // Recursively apply to children
+        if (object.children && object.children.length > 0) {
+            object.children.forEach(child => {
+                this.setObjectVisibilityState(child, state);
+            });
         }
     }
 

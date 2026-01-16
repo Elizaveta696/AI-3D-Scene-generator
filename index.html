@@ -198,6 +198,15 @@
             font-size: 14px;
         }
 
+        #title-canvas {
+            width: 100%;
+            height: 180px;
+            background: linear-gradient(135deg, #f5f5f5 0%, #ffffff 100%);
+            border-radius: 12px;
+            display: block;
+            margin-bottom: 20px;
+        }
+
         @media (max-width: 1200px) {
             #container {
                 flex-direction: column;
@@ -213,6 +222,7 @@
     <div id="container">
         <div id="canvas-container"></div>
         <div id="control-panel">
+            <canvas id="title-canvas"></canvas>
             <div>
                 <h1>3D Scene Generator</h1>
                 <p>Describe your scene and let AI create it</p>
@@ -231,6 +241,15 @@
             <div id="status">Ready</div>
 
             <div>
+                <label>Scene Scale</label>
+                <div class="button-group" style="gap: 8px;">
+                    <button id="scaleDownBtn" style="flex: 0.5; padding: 12px; font-size: 16px; font-weight: bold;">−</button>
+                    <span id="scaleValue" style="flex: 1; display: flex; align-items: center; justify-content: center; font-weight: 600; color: #333333;">1.0x</span>
+                    <button id="scaleUpBtn" style="flex: 0.5; padding: 12px; font-size: 16px; font-weight: bold;">+</button>
+                </div>
+            </div>
+
+            <div>
                 <label>Generated Objects</label>
                 <div id="objectsList"></div>
             </div>
@@ -243,6 +262,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="titleRenderer.js"></script>
     <script src="env.loader.js"></script>
     <script src="config.js"></script>
     <script src="Trees.js"></script>

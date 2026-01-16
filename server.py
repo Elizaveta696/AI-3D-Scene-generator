@@ -18,46 +18,56 @@ class ProxyHandler(BaseHTTPRequestHandler):
         if self.path == '/':
             self.path = '/index.html'
         
+        # Remove query parameters
+        if '?' in self.path:
+            self.path = self.path.split('?')[0]
+        
         # Serve static files
         try:
+            content_type = 'application/octet-stream'
+            
             if self.path.endswith('.html'):
-                with open('.' + self.path, 'rb') as f:
-                    self.send_response(200)
-                    self.send_header('Content-type', 'text/html')
-                    self.end_headers()
-                    self.wfile.write(f.read())
+                content_type = 'text/html'
             elif self.path.endswith('.js'):
-                with open('.' + self.path, 'rb') as f:
-                    self.send_response(200)
-                    self.send_header('Content-type', 'application/javascript')
-                    self.end_headers()
-                    self.wfile.write(f.read())
+                content_type = 'application/javascript'
             elif self.path.endswith('.json'):
-                with open('.' + self.path, 'rb') as f:
-                    self.send_response(200)
-                    self.send_header('Content-type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(f.read())
+                content_type = 'application/json'
             elif self.path.endswith('.env'):
-                with open('.' + self.path, 'rb') as f:
-                    self.send_response(200)
-                    self.send_header('Content-type', 'text/plain')
-                    self.end_headers()
-                    self.wfile.write(f.read())
+                content_type = 'text/plain'
             elif self.path.endswith('.css'):
-                with open('.' + self.path, 'rb') as f:
-                    self.send_response(200)
-                    self.send_header('Content-type', 'text/css')
-                    self.end_headers()
-                    self.wfile.write(f.read())
+                content_type = 'text/css'
             else:
                 self.send_response(404)
                 self.end_headers()
+                return
+            
+            with open('.' + self.path, 'rb') as f:
+                content = f.read()
+                try:
+                    self.send_response(200)
+                    self.send_header('Content-type', content_type)
+                    self.send_header('Content-Length', len(content))
+                    self.end_headers()
+                    self.wfile.write(content)
+                except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+                    # Client disconnected, ignore
+                    pass
         except FileNotFoundError:
-            self.send_response(404)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': 'File not found'}).encode())
+            try:
+                self.send_response(404)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'File not found'}).encode())
+            except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+                pass
+        except Exception as e:
+            try:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
+            except:
+                pass
     
     def do_POST(self):
         """Handle POST requests - proxy to OpenAI API"""
@@ -104,29 +114,62 @@ class ProxyHandler(BaseHTTPRequestHandler):
                         self.wfile.write(json.dumps(response_data).encode())
                 
                 except URLError as e:
-                    error_response = {'error': str(e)}
-                    if hasattr(e, 'read'):
-                        error_response['details'] = e.read().decode('utf-8')
+                    # Extract detailed error from OpenAI
+                    error_body = None
+                    error_code = 500
                     
-                    self.send_response(500)
+                    if hasattr(e, 'read'):
+                        error_body = e.read().decode('utf-8')
+                        try:
+                            error_json = json.loads(error_body)
+                            print(f"OpenAI Error: {error_json}", file=sys.stderr)
+                        except:
+                            print(f"OpenAI Error: {error_body}", file=sys.stderr)
+                    
+                    if hasattr(e, 'code'):
+                        error_code = e.code
+                    
+                    # Return the actual API error details
+                    error_response = {
+                        'error': str(e),
+                        'type': 'openai_api_error'
+                    }
+                    
+                    if error_body:
+                        try:
+                            error_response['details'] = json.loads(error_body)
+                        except:
+                            error_response['details'] = error_body
+                    
+                    self.send_response(error_code if error_code >= 400 else 500)
                     self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
                     self.end_headers()
                     self.wfile.write(json.dumps(error_response).encode())
             
             except json.JSONDecodeError:
-                self.send_response(400)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'error': 'Invalid JSON in request'}).encode())
+                try:
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'error': 'Invalid JSON in request'}).encode())
+                except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+                    pass
             
             except Exception as e:
-                self.send_response(500)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'error': str(e)}).encode())
+                try:
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'error': str(e)}).encode())
+                except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+                    pass
         else:
-            self.send_response(404)
-            self.end_headers()
+            try:
+                self.send_response(404)
+                self.end_headers()
+            except:
+                pass
     
     def do_OPTIONS(self):
         """Handle CORS preflight requests"""

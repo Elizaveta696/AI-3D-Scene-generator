@@ -42,46 +42,73 @@ class SceneGenerator {
             throw new Error('Please provide a scene description.');
         }
 
-        const prompt = `You are a 3D scene creator that can create both static and animated scenes. The user describes a scene, and you respond with a JSON object with instructions to recreate it using 3D primitives and animations.
+        const prompt = `You are a 3D scene creator using semantic object relationships. RESPOND WITH VALID JSON ONLY.
 
-AVAILABLE SHAPES:
-- Basic: sphere, cube, cylinder, cone, pyramid
-- Complex: torus, ring, dodecahedron, icosahedron, octahedron, tetrahedron, vase, capsule, wedge
-- 2D/Lines: plane, line, circle, verticalLine, horizontalLine, disk, star
-- Utilities: grid, axes, tube, lightSphere
+ANATOMY HIERARCHY:
+- head: Top of the body
+- torso: Main body/chest area
+- legs: Lower body
 
-ANIMATION OPTIONS:
-Each object can have animation properties:
-- "rotation": { "x": speed, "y": speed, "z": speed } - rotates object on axes (speed in radians/frame, typical: 0.002-0.01)
-- "orbit": { "radius": distance, "speed": speed, "axis": "y" } - orbits around center point (speed typical: 0.001-0.005)
-- "scale": { "speed": speed, "min": minimum, "max": maximum } - pulsing/scaling animation
+OBJECT ROLES:
+- body: Primary body part (human, animal, etc.)
+- clothing: Worn on body parts (dresses, shirts, pants)
+- accessory: Worn on head/body (hats, glasses, jewelry)
+- environment: Scene elements (buildings, trees, furniture)
+- prop: Held objects or interactive items
+- decoration: Non-functional scene elements
 
-RESPONSE FORMAT:
+ATTACHMENT RULES (MANDATORY):
+- Hair, eyes, hats, glasses → attachTo: "head"
+- Shirts, jackets, vests → attachTo: "torso", coverage: "upper-body"
+- Pants, skirts, dresses → attachTo: "torso", coverage: "lower-body" or "full-body"
+- Shoes, socks → attachTo: "legs"
+- Belts, necklaces → attachTo: "torso"
+- Gloves → attachTo: "arms"
+- Standalone objects (buildings, trees, props) → attachTo: "scene"
+
+EXAMPLE RESPONSE FOR "A girl in a blue dress":
 {
   "objects": [
     {
-      "type": "sphere",
-      "name": "object name",
-      "params": { "radius": 2, "color": "0x808080", "x": 0, "y": 0, "z": 0 },
-      "animation": { "rotation": { "x": 0, "y": 0.002, "z": 0 } }
+      "type": "human",
+      "name": "girl",
+      "role": "body",
+      "attachTo": "scene",
+      "params": { "scale": 2, "color": "0x999999", "x": 0, "y": 0, "z": 0 }
     },
     {
-      "type": "circle",
-      "name": "orbit",
-      "params": { "radius": 10, "color": "0x666666", "x": 0, "y": 0, "z": 0 }
+      "type": "hair",
+      "name": "brown hair",
+      "role": "accessory",
+      "attachTo": "head",
+      "coverage": "full-head",
+      "params": { "scale": 1, "color": "0x4a3728" },
+      "scale_multiplier": 1.0
+    },
+    {
+      "type": "cube",
+      "name": "blue dress",
+      "role": "clothing",
+      "attachTo": "torso",
+      "coverage": "full-body",
+      "params": { "width": 1, "height": 1.5, "depth": 0.8, "color": "0x0066ff" },
+      "scale_multiplier": 1.0,
+      "offset": { "x": 0, "y": -0.5, "z": 0.1 }
     }
   ],
-  "background": "0x1a1a1a",
-  "scene_description": "Description"
+  "background": "0x1a1a1a"
 }
 
-IMPORTANT:
-- Use ONLY grayscale (0x000000 to 0xffffff)
-- Make objects LARGE (radius 2-20)
-- Use circles for orbits, not lines
-- Add orbit animations to make planets/objects move around circles
-- Include rotation animations for spinning objects
-- For planets: create sphere + circle orbit + both animations
+CRITICAL RULES:
+1. NEVER output absolute x,y,z for objects with attachTo != "scene"
+2. Only output scene-level objects with absolute positions
+3. Use scale_multiplier (0.5-2.0) for relative sizing
+4. Include optional offset { "x", "y", "z" } for attachment points
+5. Clothing must specify coverage field
+6. NO position/size assumptions - let renderer handle placement
+7. RESPOND WITH ONLY VALID JSON - no explanations
+
+Available shapes: human, house, tree, cloud, mountain, eye, hair, animal, sphere, cube, cylinder, cone, pyramid, torus, ring, plane, vase, capsule, disk, prism, wedge, tube, circle, verticalLine, horizontalLine, star, lightSphere, grid, axes, line
 
 User description: "${sceneDescription}"`;
 
@@ -95,7 +122,7 @@ User description: "${sceneDescription}"`;
                 },
                 body: JSON.stringify({
                     data: {
-                        model: 'gpt-3.5-turbo',
+                        model: 'gpt-4o',
                         messages: [
                             {
                                 role: 'system',
@@ -114,7 +141,9 @@ User description: "${sceneDescription}"`;
 
             if (!response.ok) {
                 const error = await response.json();
-                throw new Error(`API error: ${error.error || 'Unknown error'}`);
+                const errorMsg = error.details?.error?.message || error.error || 'Unknown error';
+                console.error('Full error details:', error);
+                throw new Error(`API error: ${errorMsg}`);
             }
 
             const data = await response.json();
@@ -154,14 +183,18 @@ User description: "${sceneDescription}"`;
             throw new Error('Scene data must contain an objects array');
         }
 
-        const validTypes = ['sphere', 'cube', 'cylinder', 'cone', 'torus', 'plane', 'line', 'pyramid', 'tetrahedron', 'octahedron', 'lightSphere', 'ring', 'dodecahedron', 'icosahedron', 'vase', 'capsule', 'disk', 'prism', 'wedge', 'star', 'circle', 'verticalLine', 'horizontalLine', 'grid', 'axes', 'tube'];
+        const validTypes = ['sphere', 'cube', 'cylinder', 'cone', 'torus', 'plane', 'line', 'pyramid', 'tetrahedron', 'octahedron', 'lightSphere', 'ring', 'dodecahedron', 'icosahedron', 'vase', 'capsule', 'disk', 'prism', 'wedge', 'star', 'circle', 'verticalLine', 'horizontalLine', 'grid', 'axes', 'tube', 'human', 'house', 'tree', 'cloud', 'mountain', 'eye', 'hair', 'animal'];
 
         for (const obj of sceneData.objects) {
             if (!obj.type || !validTypes.includes(obj.type)) {
-                throw new Error(`Invalid object type: ${obj.type}. Must be one of: ${validTypes.join(', ')}`);
+                throw new Error(`Invalid object type: ${obj.type}`);
             }
             if (!obj.params) {
                 throw new Error('Each object must have params');
+            }
+            // New semantic fields are optional but validated if present
+            if (obj.attachTo && !['scene', 'head', 'torso', 'legs', 'arms'].includes(obj.attachTo)) {
+                console.warn(`Unknown attachTo: ${obj.attachTo}, treating as scene-level`);
             }
         }
 

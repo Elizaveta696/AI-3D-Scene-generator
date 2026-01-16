@@ -618,5 +618,353 @@ const Trees = {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         return mesh;
+    },
+
+    /**
+     * Creates a simple human figure
+     * @param {number} scale - Scale factor
+     * @param {string} color - Hex color code
+     * @param {number} x - X position
+     * @param {number} y - Y position
+     * @param {number} z - Z position
+     * @returns {THREE.Group} Human figure group
+     */
+    human: function(scale = 1, color = 0x999999, x = 0, y = 0, z = 0) {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+        
+        // Head
+        const headGeom = new THREE.SphereGeometry(0.4 * scale, 16, 16);
+        const headMat = new THREE.MeshStandardMaterial({ color: 0xcc9988 });
+        const head = new THREE.Mesh(headGeom, headMat);
+        head.position.y = 1.2 * scale;
+        group.add(head);
+        
+        // Body
+        const bodyGeom = new THREE.BoxGeometry(0.4 * scale, 0.8 * scale, 0.3 * scale);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: color });
+        const body = new THREE.Mesh(bodyGeom, bodyMat);
+        body.position.y = 0.4 * scale;
+        group.add(body);
+        
+        // Left arm
+        const armGeom = new THREE.BoxGeometry(0.15 * scale, 0.6 * scale, 0.15 * scale);
+        const armMat = new THREE.MeshStandardMaterial({ color: 0xcc9988 });
+        const leftArm = new THREE.Mesh(armGeom, armMat);
+        leftArm.position.set(-0.35 * scale, 0.5 * scale, 0);
+        group.add(leftArm);
+        
+        // Right arm
+        const rightArm = new THREE.Mesh(armGeom, armMat);
+        rightArm.position.set(0.35 * scale, 0.5 * scale, 0);
+        group.add(rightArm);
+        
+        // Left leg
+        const legGeom = new THREE.BoxGeometry(0.15 * scale, 0.6 * scale, 0.15 * scale);
+        const legMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const leftLeg = new THREE.Mesh(legGeom, legMat);
+        leftLeg.position.set(-0.15 * scale, -0.3 * scale, 0);
+        group.add(leftLeg);
+        
+        // Right leg
+        const rightLeg = new THREE.Mesh(legGeom, legMat);
+        rightLeg.position.set(0.15 * scale, -0.3 * scale, 0);
+        group.add(rightLeg);
+        
+        group.castShadow = true;
+        group.receiveShadow = true;
+        return group;
+    },
+
+    /**
+     * Creates a simple house
+     * @param {number} scale - Scale factor
+     * @param {string} color - Hex color code
+     * @param {number} x - X position
+     * @param {number} y - Y position
+     * @param {number} z - Z position
+     * @returns {THREE.Group} House group
+     */
+    house: function(scale = 1, color = 0x8B4513, x = 0, y = 0, z = 0) {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+        
+        // Main walls
+        const wallGeom = new THREE.BoxGeometry(2 * scale, 1.8 * scale, 1.5 * scale);
+        const wallMat = new THREE.MeshStandardMaterial({ color: color });
+        const walls = new THREE.Mesh(wallGeom, wallMat);
+        walls.position.y = 0.9 * scale;
+        group.add(walls);
+        
+        // Roof
+        const roofGeom = new THREE.ConeGeometry(1.5 * scale, 1 * scale, 4);
+        const roofMat = new THREE.MeshStandardMaterial({ color: 0x8B0000 });
+        const roof = new THREE.Mesh(roofGeom, roofMat);
+        roof.position.y = 2.2 * scale;
+        group.add(roof);
+        
+        // Door
+        const doorGeom = new THREE.BoxGeometry(0.4 * scale, 1 * scale, 0.1 * scale);
+        const doorMat = new THREE.MeshStandardMaterial({ color: 0x654321 });
+        const door = new THREE.Mesh(doorGeom, doorMat);
+        door.position.set(0, 0.5 * scale, 0.75 * scale);
+        group.add(door);
+        
+        // Window
+        const winGeom = new THREE.BoxGeometry(0.4 * scale, 0.4 * scale, 0.1 * scale);
+        const winMat = new THREE.MeshStandardMaterial({ color: 0x87CEEB });
+        const window1 = new THREE.Mesh(winGeom, winMat);
+        window1.position.set(-0.5 * scale, 1.2 * scale, 0.75 * scale);
+        group.add(window1);
+        
+        const window2 = new THREE.Mesh(winGeom, winMat);
+        window2.position.set(0.5 * scale, 1.2 * scale, 0.75 * scale);
+        group.add(window2);
+        
+        group.castShadow = true;
+        group.receiveShadow = true;
+        return group;
+    },
+
+    /**
+     * Creates a simple eye
+     * @param {number} scale - Scale factor
+     * @param {number} x - X position
+     * @param {number} y - Y position
+     * @param {number} z - Z position
+     * @returns {THREE.Group} Eye group
+     */
+    eye: function(scale = 1, x = 0, y = 0, z = 0) {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+        
+        // White of eye
+        const whiteGeom = new THREE.SphereGeometry(0.6 * scale, 16, 16);
+        const whiteMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+        const white = new THREE.Mesh(whiteGeom, whiteMat);
+        group.add(white);
+        
+        // Iris
+        const irisGeom = new THREE.SphereGeometry(0.35 * scale, 16, 16);
+        const irisMat = new THREE.MeshStandardMaterial({ color: 0x4488BB });
+        const iris = new THREE.Mesh(irisGeom, irisMat);
+        iris.position.z = 0.25 * scale;
+        group.add(iris);
+        
+        // Pupil
+        const pupilGeom = new THREE.SphereGeometry(0.15 * scale, 12, 12);
+        const pupilMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+        const pupil = new THREE.Mesh(pupilGeom, pupilMat);
+        pupil.position.z = 0.5 * scale;
+        group.add(pupil);
+        
+        group.castShadow = true;
+        group.receiveShadow = true;
+        return group;
+    },
+
+    /**
+     * Creates a simple tree/plant
+     * @param {number} scale - Scale factor
+     * @param {string} color - Hex color code (foliage)
+     * @param {number} x - X position
+     * @param {number} y - Y position
+     * @param {number} z - Z position
+     * @returns {THREE.Group} Tree group
+     */
+    tree: function(scale = 1, color = 0x228B22, x = 0, y = 0, z = 0) {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+        
+        // Trunk
+        const trunkGeom = new THREE.CylinderGeometry(0.2 * scale, 0.3 * scale, 1.5 * scale, 8);
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+        const trunk = new THREE.Mesh(trunkGeom, trunkMat);
+        trunk.position.y = 0.75 * scale;
+        group.add(trunk);
+        
+        // Foliage
+        const foliageGeom = new THREE.SphereGeometry(1 * scale, 8, 8);
+        const foliageMat = new THREE.MeshStandardMaterial({ color: color });
+        const foliage = new THREE.Mesh(foliageGeom, foliageMat);
+        foliage.position.y = 2 * scale;
+        group.add(foliage);
+        
+        group.castShadow = true;
+        group.receiveShadow = true;
+        return group;
+    },
+
+    /**
+     * Creates a simple cloud
+     * @param {number} scale - Scale factor
+     * @param {number} x - X position
+     * @param {number} y - Y position
+     * @param {number} z - Z position
+     * @returns {THREE.Group} Cloud group
+     */
+    cloud: function(scale = 1, x = 0, y = 0, z = 0) {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+        
+        const cloudMat = new THREE.MeshStandardMaterial({ 
+            color: 0xFFFFFF,
+            metalness: 0,
+            roughness: 0.8
+        });
+        
+        // Create cloud from multiple spheres
+        const s1 = new THREE.Mesh(new THREE.SphereGeometry(0.5 * scale, 8, 8), cloudMat);
+        s1.position.x = -0.6 * scale;
+        group.add(s1);
+        
+        const s2 = new THREE.Mesh(new THREE.SphereGeometry(0.7 * scale, 8, 8), cloudMat);
+        s2.position.x = 0;
+        group.add(s2);
+        
+        const s3 = new THREE.Mesh(new THREE.SphereGeometry(0.5 * scale, 8, 8), cloudMat);
+        s3.position.x = 0.6 * scale;
+        group.add(s3);
+        
+        const s4 = new THREE.Mesh(new THREE.SphereGeometry(0.4 * scale, 8, 8), cloudMat);
+        s4.position.set(-0.3 * scale, 0.3 * scale, 0);
+        group.add(s4);
+        
+        const s5 = new THREE.Mesh(new THREE.SphereGeometry(0.4 * scale, 8, 8), cloudMat);
+        s5.position.set(0.3 * scale, 0.3 * scale, 0);
+        group.add(s5);
+        
+        group.castShadow = true;
+        group.receiveShadow = true;
+        return group;
+    },
+
+    /**
+     * Creates a simple mountain
+     * @param {number} scale - Scale factor
+     * @param {string} color - Hex color code
+     * @param {number} x - X position
+     * @param {number} y - Y position
+     * @param {number} z - Z position
+     * @returns {THREE.Group} Mountain group
+     */
+    mountain: function(scale = 1, color = 0x808080, x = 0, y = 0, z = 0) {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+        
+        const mountainMat = new THREE.MeshStandardMaterial({ color: color });
+        
+        // Peak
+        const peakGeom = new THREE.ConeGeometry(0.8 * scale, 2 * scale, 8);
+        const peak = new THREE.Mesh(peakGeom, mountainMat);
+        peak.castShadow = true;
+        peak.receiveShadow = true;
+        group.add(peak);
+        
+        // Base
+        const baseGeom = new THREE.ConeGeometry(2 * scale, 0.5 * scale, 8);
+        const base = new THREE.Mesh(baseGeom, mountainMat);
+        base.position.y = -0.75 * scale;
+        base.castShadow = true;
+        base.receiveShadow = true;
+        group.add(base);
+        
+        return group;
+    },
+
+    /**
+     * Creates simple hair/afro
+     * @param {number} scale - Scale factor
+     * @param {string} color - Hex color code
+     * @param {number} x - X position
+     * @param {number} y - Y position
+     * @param {number} z - Z position
+     * @returns {THREE.Group} Hair group
+     */
+    hair: function(scale = 1, color = 0x8B4513, x = 0, y = 0, z = 0) {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+        
+        const hairMat = new THREE.MeshStandardMaterial({ color: color });
+        
+        // Main hair volume
+        const mainGeom = new THREE.SphereGeometry(0.6 * scale, 16, 16);
+        const main = new THREE.Mesh(mainGeom, hairMat);
+        group.add(main);
+        
+        // Hair strands (simple cylinders)
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const strandGeom = new THREE.CylinderGeometry(0.05 * scale, 0.05 * scale, 0.8 * scale, 6);
+            const strand = new THREE.Mesh(strandGeom, hairMat);
+            strand.position.set(
+                Math.cos(angle) * 0.6 * scale,
+                0.4 * scale,
+                Math.sin(angle) * 0.6 * scale
+            );
+            group.add(strand);
+        }
+        
+        group.castShadow = true;
+        group.receiveShadow = true;
+        return group;
+    },
+
+    /**
+     * Creates a simple animal (cat-like)
+     * @param {number} scale - Scale factor
+     * @param {string} color - Hex color code
+     * @param {number} x - X position
+     * @param {number} y - Y position
+     * @param {number} z - Z position
+     * @returns {THREE.Group} Animal group
+     */
+    animal: function(scale = 1, color = 0xFF6B6B, x = 0, y = 0, z = 0) {
+        const group = new THREE.Group();
+        group.position.set(x, y, z);
+        
+        const bodyMat = new THREE.MeshStandardMaterial({ color: color });
+        
+        // Body
+        const bodyGeom = new THREE.SphereGeometry(0.5 * scale, 12, 12);
+        const body = new THREE.Mesh(bodyGeom, bodyMat);
+        group.add(body);
+        
+        // Head
+        const headGeom = new THREE.SphereGeometry(0.35 * scale, 12, 12);
+        const head = new THREE.Mesh(headGeom, bodyMat);
+        head.position.set(0.6 * scale, 0.1 * scale, 0);
+        group.add(head);
+        
+        // Ears
+        const earGeom = new THREE.ConeGeometry(0.15 * scale, 0.4 * scale, 8);
+        const leftEar = new THREE.Mesh(earGeom, bodyMat);
+        leftEar.position.set(0.5 * scale, 0.4 * scale, -0.2 * scale);
+        group.add(leftEar);
+        
+        const rightEar = new THREE.Mesh(earGeom, bodyMat);
+        rightEar.position.set(0.5 * scale, 0.4 * scale, 0.2 * scale);
+        group.add(rightEar);
+        
+        // Tail
+        const tailGeom = new THREE.CylinderGeometry(0.08 * scale, 0.05 * scale, 1 * scale, 8);
+        const tail = new THREE.Mesh(tailGeom, bodyMat);
+        tail.position.set(-0.5 * scale, -0.2 * scale, 0);
+        tail.rotation.z = 0.5;
+        group.add(tail);
+        
+        // Legs
+        for (let i = 0; i < 4; i++) {
+            const legGeom = new THREE.CylinderGeometry(0.08 * scale, 0.08 * scale, 0.4 * scale, 6);
+            const leg = new THREE.Mesh(legGeom, bodyMat);
+            const xOffset = i < 2 ? -0.25 : 0.25;
+            const zOffset = i % 2 === 0 ? -0.25 : 0.25;
+            leg.position.set(xOffset * scale, -0.4 * scale, zOffset * scale);
+            group.add(leg);
+        }
+        
+        group.castShadow = true;
+        group.receiveShadow = true;
+        return group;
     }
 };
