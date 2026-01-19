@@ -42,12 +42,14 @@ class SceneGenerator {
             throw new Error('Please provide a scene description.');
         }
 
-        const prompt = `You are a 3D scene creator using semantic object relationships. RESPOND WITH VALID JSON ONLY.
+        const prompt = `You are a 3D scene creator using semantic object relationships. Create diverse, interesting 3D scenes with varied objects and environments. RESPOND WITH VALID JSON ONLY.
 
-ANATOMY HIERARCHY:
+ANATOMY HIERARCHY (VALID attachTo values for body parts):
 - head: Top of the body
 - torso: Main body/chest area
 - legs: Lower body
+- arms: (if needed for gloves/sleeves)
+- scene: Scene-level objects (MUST use this for all standalone objects)
 
 OBJECT ROLES:
 - body: Primary body part (human, animal, etc.)
@@ -64,9 +66,27 @@ ATTACHMENT RULES (MANDATORY):
 - Shoes, socks → attachTo: "legs"
 - Belts, necklaces → attachTo: "torso"
 - Gloves → attachTo: "arms"
-- Standalone objects (buildings, trees, props) → attachTo: "scene"
+- ALL OTHER OBJECTS (sphere, cube, cylinder, cone, pyramid, torus, ring, plane, vase, capsule, disk, prism, wedge, tube, circle, verticalLine, horizontalLine, star, lightSphere, grid, axes, line, human, house, tree, cloud, mountain, eye, animal) → attachTo: "scene"
 
-EXAMPLE RESPONSE FOR "A girl in a blue dress":
+AVAILABLE OBJECT TYPES (COMPLETE LIST):
+Shapes: sphere, cube, cylinder, cone, pyramid, tetrahedron, octahedron, dodecahedron, icosahedron, torus, ring, plane, vase, capsule, disk, prism, wedge, star, circle, verticalLine, horizontalLine, grid, axes, tube, lightSphere, line
+Complex Objects: human, house, tree, cloud, mountain, eye, hair, animal
+
+CRITICAL RULES:
+1. ONLY use attachTo values from: "head", "torso", "legs", "arms", or "scene"
+2. NEVER invent attachTo values like "neck", "saturn", "face", "chest", etc.
+3. For any standalone object → ALWAYS use attachTo: "scene"
+4. NEVER output absolute x,y,z for objects with attachTo != "scene"
+5. Only scene-level objects get absolute positions
+6. Use scale_multiplier (0.5-2.0) for relative sizing
+7. Include optional offset { "x", "y", "z" } for attachment points
+8. Clothing must specify coverage field
+9. Mix different types of objects in scenes - don't just create people/humans
+10. RESPOND WITH ONLY VALID JSON - no explanations
+11. Neveer use the color of the background as an object color
+12. Use diverse colors and avoid repetition
+
+EXAMPLE RESPONSE FOR "A girl in a blue dress with trees":
 {
   "objects": [
     {
@@ -74,7 +94,7 @@ EXAMPLE RESPONSE FOR "A girl in a blue dress":
       "name": "girl",
       "role": "body",
       "attachTo": "scene",
-      "params": { "scale": 2, "color": "0x999999", "x": 0, "y": 0, "z": 0 }
+      "params": { "scale": 2, "color": "0x999999", "x": -3, "y": 0, "z": 0 }
     },
     {
       "type": "hair",
@@ -94,21 +114,24 @@ EXAMPLE RESPONSE FOR "A girl in a blue dress":
       "params": { "width": 1, "height": 1.5, "depth": 0.8, "color": "0x0066ff" },
       "scale_multiplier": 1.0,
       "offset": { "x": 0, "y": -0.5, "z": 0.1 }
+    },
+    {
+      "type": "tree",
+      "name": "tree left",
+      "role": "environment",
+      "attachTo": "scene",
+      "params": { "scale": 1.5, "color": "0x228B22", "x": -6, "y": 0, "z": 2 }
+    },
+    {
+      "type": "tree",
+      "name": "tree right",
+      "role": "environment",
+      "attachTo": "scene",
+      "params": { "scale": 1.5, "color": "0x228B22", "x": 3, "y": 0, "z": 2 }
     }
   ],
   "background": "0x1a1a1a"
 }
-
-CRITICAL RULES:
-1. NEVER output absolute x,y,z for objects with attachTo != "scene"
-2. Only output scene-level objects with absolute positions
-3. Use scale_multiplier (0.5-2.0) for relative sizing
-4. Include optional offset { "x", "y", "z" } for attachment points
-5. Clothing must specify coverage field
-6. NO position/size assumptions - let renderer handle placement
-7. RESPOND WITH ONLY VALID JSON - no explanations
-
-Available shapes: human, house, tree, cloud, mountain, eye, hair, animal, sphere, cube, cylinder, cone, pyramid, torus, ring, plane, vase, capsule, disk, prism, wedge, tube, circle, verticalLine, horizontalLine, star, lightSphere, grid, axes, line
 
 User description: "${sceneDescription}"`;
 
@@ -161,6 +184,36 @@ User description: "${sceneDescription}"`;
                 } else {
                     throw new Error('Could not parse OpenAI response as JSON');
                 }
+            }
+
+            // Print the parsed JSON to console for debugging
+            console.log('=== OpenAI Generated Scene Data ===');
+            console.log(JSON.stringify(sceneData, null, 2));
+            console.log('===================================');
+
+            // Ensure objects array exists and is valid
+            if (!sceneData.objects || !Array.isArray(sceneData.objects)) {
+                sceneData.objects = [];
+            }
+
+            // Validate each object has required fields
+            sceneData.objects = sceneData.objects.filter(obj => {
+                if (!obj || typeof obj !== 'object') return false;
+                // Set defaults for missing required fields
+                if (!obj.type) obj.type = 'cube';
+                if (!obj.name) obj.name = obj.type;
+                if (!obj.params) obj.params = {};
+                if (!obj.role) obj.role = 'environment';
+                if (!obj.attachTo) obj.attachTo = 'scene';
+                // Ensure params has required properties
+                if (obj.params.color === undefined) obj.params.color = 0xcccccc;
+                if (obj.params.scale === undefined) obj.params.scale = 1;
+                return true;
+            });
+
+            // Ensure background is defined
+            if (!sceneData.background) {
+                sceneData.background = '0x383838';
             }
 
             return sceneData;

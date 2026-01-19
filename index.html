@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Gravitas+One&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -200,8 +201,8 @@
 
         #title-canvas {
             width: 100%;
-            height: 180px;
-            background: linear-gradient(135deg, #f5f5f5 0%, #ffffff 100%);
+            height: 280px;
+            background: transparent;
             border-radius: 12px;
             display: block;
             margin-bottom: 20px;
@@ -223,17 +224,10 @@
         <div id="canvas-container"></div>
         <div id="control-panel">
             <canvas id="title-canvas"></canvas>
-            <div>
-                <h1>3D Scene Generator</h1>
-                <p>Describe your scene and let AI create it</p>
-            </div>
 
             <div>
                 <label for="sceneDescription">Describe Your Scene</label>
-                <textarea 
-                    id="sceneDescription" 
-                    placeholder="E.g., A large red planet with 2 white moons and a yellow sun, mountains on surface...">
-                </textarea>
+                <textarea id="sceneDescription" placeholder="E.g., A large red planet with 2 white moons and a yellow sun, mountains on surface..."></textarea>
             </div>
 
             <button id="generateBtn">Generate Scene</button>

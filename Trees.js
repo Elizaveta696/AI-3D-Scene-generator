@@ -873,7 +873,7 @@ const Trees = {
     },
 
     /**
-     * Creates simple hair/afro
+     * Creates natural-looking hair with volume and flow
      * @param {number} scale - Scale factor
      * @param {string} color - Hex color code
      * @param {number} x - X position
@@ -885,25 +885,55 @@ const Trees = {
         const group = new THREE.Group();
         group.position.set(x, y, z);
         
-        const hairMat = new THREE.MeshStandardMaterial({ color: color });
+        const hairMat = new THREE.MeshStandardMaterial({ 
+            color: color,
+            metalness: 0.1,
+            roughness: 0.6,
+            side: THREE.DoubleSide
+        });
         
-        // Main hair volume
-        const mainGeom = new THREE.SphereGeometry(0.6 * scale, 16, 16);
+        // Main hair volume - elongated for more natural look
+        const mainGeom = new THREE.SphereGeometry(0.5 * scale, 20, 24);
         const main = new THREE.Mesh(mainGeom, hairMat);
+        main.scale.set(1, 1.3, 0.95); // Make it taller and slightly narrower
         group.add(main);
         
-        // Hair strands (simple cylinders)
-        for (let i = 0; i < 8; i++) {
-            const angle = (i / 8) * Math.PI * 2;
-            const strandGeom = new THREE.CylinderGeometry(0.05 * scale, 0.05 * scale, 0.8 * scale, 6);
+        // Add back/length with tapered geometry
+        const backGeom = new THREE.ConeGeometry(0.4 * scale, 1.2 * scale, 16);
+        const back = new THREE.Mesh(backGeom, hairMat);
+        back.position.set(0, -0.3 * scale, 0.1 * scale);
+        back.rotation.x = Math.PI * 0.15;
+        group.add(back);
+        
+        // Hair strands for texture - more numerous and thinner for natural look
+        for (let i = 0; i < 16; i++) {
+            const angle = (i / 16) * Math.PI * 2;
+            const strandGeom = new THREE.CylinderGeometry(0.02 * scale, 0.015 * scale, 0.7 * scale, 4);
             const strand = new THREE.Mesh(strandGeom, hairMat);
+            
+            const radius = 0.5 + Math.sin(i * 0.5) * 0.1;
             strand.position.set(
-                Math.cos(angle) * 0.6 * scale,
-                0.4 * scale,
-                Math.sin(angle) * 0.6 * scale
+                Math.cos(angle) * radius * scale,
+                0.1 * scale + Math.cos(i) * 0.15 * scale,
+                Math.sin(angle) * radius * 0.8 * scale
             );
+            strand.rotation.z = angle + (i % 2) * 0.3;
             group.add(strand);
         }
+        
+        // Hair highlights/shine - add some specular elements
+        const highlightMat = new THREE.MeshStandardMaterial({
+            color: color,
+            metalness: 0.3,
+            roughness: 0.3,
+            emissive: 0x333333
+        });
+        
+        const highlight = new THREE.SphereGeometry(0.3 * scale, 12, 12);
+        const shine = new THREE.Mesh(highlight, highlightMat);
+        shine.position.set(0.1 * scale, 0.3 * scale, -0.2 * scale);
+        shine.scale.set(1.2, 0.8, 0.6);
+        group.add(shine);
         
         group.castShadow = true;
         group.receiveShadow = true;

@@ -3,6 +3,126 @@
  * Handles UI interactions and Three.js scene management
  */
 
+// ============================================================================
+// HELPER FUNCTIONS FOR ROBUSTNESS & NORMALIZATION
+// ============================================================================
+
+/**
+ * Safely parse color values from various formats
+ * @param {string|number|undefined} color - Color as hex string or number
+ * @returns {number} Valid Three.js color number
+ */
+function parseColor(color) {
+    if (typeof color === 'number') return Math.max(0, color);
+    if (typeof color === 'string') {
+        try {
+            // Handle "0xFFD700" format
+            return parseInt(color, 16);
+        } catch (e) {
+            console.warn(`Invalid color format: ${color}, using default`);
+        }
+    }
+    return 0xcccccc; // Safe default grey
+}
+
+/**
+ * Clamp scale values to reasonable visualization range
+ * Prevents invisible tiny objects and massively oversized ones
+ * @param {number} scale - Original scale value
+ * @returns {number} Clamped scale (0.1 to 10)
+ */
+function clampScale(scale) {
+    const normalized = typeof scale === 'number' ? scale : 1;
+    return Math.max(0.1, Math.min(10, normalized));
+}
+
+/**
+ * Ensure position values exist and are valid numbers
+ * @param {number} value - Position component (x, y, or z)
+ * @param {number} defaultValue - Fallback if invalid
+ * @returns {number} Valid position value
+ */
+function safePosition(value, defaultValue = 0) {
+    return (typeof value === 'number' && isFinite(value)) ? value : defaultValue;
+}
+
+/**
+ * Normalize object data before rendering
+ * Ensures all required fields exist with safe defaults
+ * @param {Object} objData - Object data from AI
+ * @returns {Object} Normalized object data
+ */
+function normalizeObjectData(objData) {
+    if (!objData || typeof objData !== 'object') {
+        console.warn('Invalid object data, skipping');
+        return null;
+    }
+
+    return {
+        type: objData.type || 'cube',
+        name: objData.name || objData.type || 'object',
+        role: objData.role || 'environment',
+        attachTo: objData.attachTo || 'scene',
+        params: normalizeParams(objData.params || {}),
+        scale_multiplier: clampScale(objData.scale_multiplier),
+        offset: objData.offset || { x: 0, y: 0, z: 0 },
+        coverage: objData.coverage,
+        animation: objData.animation
+    };
+}
+
+/**
+ * Normalize object params with safe defaults
+ * @param {Object} params - Raw params from AI
+ * @returns {Object} Safe params object
+ */
+function normalizeParams(params) {
+    return {
+        x: safePosition(params.x),
+        y: safePosition(params.y),
+        z: safePosition(params.z),
+        scale: clampScale(params.scale),
+        color: parseColor(params.color),
+        radius: Math.max(0.1, params.radius || 1),
+        radiusTop: Math.max(0.1, params.radiusTop || 1),
+        radiusBottom: Math.max(0.1, params.radiusBottom || 1),
+        width: Math.max(0.1, params.width || 1),
+        height: Math.max(0.1, params.height || 1),
+        depth: Math.max(0.1, params.depth || 1),
+        innerRadius: Math.max(0.1, params.innerRadius || 1),
+        outerRadius: Math.max(0.1, params.outerRadius || 2),
+        tube: Math.max(0.05, params.tube || 0.5),
+        intensity: Math.max(0.1, params.intensity || 1),
+        size: Math.max(0.1, params.size || 1),
+        sides: Math.max(3, Math.floor(params.sides || 6)),
+        divisions: Math.max(3, Math.floor(params.divisions || 10)),
+        tubeRadius: Math.max(0.05, params.tubeRadius || 0.5),
+        length: Math.max(0.1, params.length || 2),
+        x1: safePosition(params.x1),
+        y1: safePosition(params.y1),
+        z1: safePosition(params.z1),
+        x2: safePosition(params.x2, 1),
+        y2: safePosition(params.y2, 1),
+        z2: safePosition(params.z2, 1)
+    };
+}
+
+/**
+ * Safely parse background color
+ * @param {string|number|undefined} background - Background color value
+ * @returns {THREE.Color} Valid Three.js Color object
+ */
+function parseBackgroundColor(background) {
+    try {
+        if (!background) return new THREE.Color(0x383838);
+        if (typeof background === 'number') return new THREE.Color(background);
+        if (typeof background === 'string') return new THREE.Color(parseInt(background, 16));
+    } catch (e) {
+        console.warn(`Invalid background color: ${background}, using default`);
+    }
+    return new THREE.Color(0x383838);
+}
+
 class App {
     constructor() {
         // Scene setup
@@ -163,21 +283,27 @@ class App {
     }
 
     setupLights() {
-        // Ambient light for overall illumination
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        // Strong ambient light ensures nothing is ever completely black
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
         this.scene.add(ambientLight);
 
-        // Directional light for shadows
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
-        directionalLight.position.set(20, 20, 10);
+        // Primary directional light - positioned to illuminate from front-top-right
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        directionalLight.position.set(30, 30, 20);
         directionalLight.castShadow = true;
         directionalLight.shadow.mapSize.width = 2048;
         directionalLight.shadow.mapSize.height = 2048;
-        directionalLight.shadow.camera.left = -100;
-        directionalLight.shadow.camera.right = 100;
-        directionalLight.shadow.camera.top = 100;
-        directionalLight.shadow.camera.bottom = -100;
+        directionalLight.shadow.camera.left = -150;
+        directionalLight.shadow.camera.right = 150;
+        directionalLight.shadow.camera.top = 150;
+        directionalLight.shadow.camera.bottom = -150;
+        directionalLight.shadow.camera.far = 1000;
         this.scene.add(directionalLight);
+
+        // Secondary fill light from opposite angle for better scene visibility
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        fillLight.position.set(-20, 10, -30);
+        this.scene.add(fillLight);
     }
 
     setupMouseControls() {
@@ -281,10 +407,8 @@ class App {
                 scaleValueElement.textContent = '1.0x';
             }
 
-            // Set background color
-            if (sceneData.background) {
-                this.scene.background = new THREE.Color(parseInt(sceneData.background));
-            }
+            // Set background color safely
+            this.scene.background = parseBackgroundColor(sceneData.background);
 
             // Create objects from scene data
             this.createObjectsFromData(sceneData.objects);
@@ -308,8 +432,12 @@ class App {
         // First pass: create all body objects and scene-level objects
         const bodyObjects = new Map(); // Track bodies by ID
         
-        for (const objData of objectsData) {
+        for (let objData of objectsData) {
             try {
+                // Normalize the object data first for robustness
+                objData = normalizeObjectData(objData);
+                if (!objData) continue;
+                
                 const params = objData.params;
                 
                 // Determine if this is a body, clothing, or scene object
@@ -342,13 +470,17 @@ class App {
                     }
                 }
             } catch (error) {
-                console.error(`Error creating object ${objData.type}:`, error);
+                console.error(`Error creating object ${objData?.type}:`, error);
             }
         }
         
         // Second pass: attach clothing and accessories to body parts
-        for (const objData of objectsData) {
+        for (let objData of objectsData) {
             try {
+                // Normalize the object data
+                objData = normalizeObjectData(objData);
+                if (!objData) continue;
+                
                 const attachTo = objData.attachTo || 'scene';
                 
                 // Skip scene-level objects
@@ -390,7 +522,7 @@ class App {
                 this.currentObjects.push(mesh);
                 
             } catch (error) {
-                console.error(`Error attaching ${objData.type}:`, error);
+                console.error(`Error attaching ${objData?.type}:`, error);
             }
         }
     }
@@ -400,54 +532,50 @@ class App {
      * Handles all shape types and returns the appropriate Three.js mesh
      */
     createMesh(objData) {
-        let mesh;
-        const params = objData.params;
-        
-        // Convert color string to number if needed
-        if (typeof params.color === 'string') {
-            params.color = parseInt(params.color);
-        }
-        
-        // Get position - use 0 if not specified since relative positioning is handled separately
-        const x = params.x || 0;
-        const y = params.y || 0;
-        const z = params.z || 0;
-        
-        // Create mesh based on type
-        switch (objData.type) {
-            case 'sphere':
-                mesh = Trees.sphere(params.radius || 2, params.color, x, y, z);
-                break;
-            case 'cube':
-                mesh = Trees.cube(params.width || 2, params.height || 2, params.depth || 2, params.color, x, y, z);
-                break;
-            case 'cylinder':
-                mesh = Trees.cylinder(params.radiusTop || 2, params.radiusBottom || 2, params.height || 4, params.color, x, y, z);
-                break;
-            case 'cone':
-                mesh = Trees.cone(params.radius || 2, params.height || 4, params.color, x, y, z);
-                break;
-            case 'torus':
-                mesh = Trees.torus(params.radius || 3, params.tube || 1, params.color, x, y, z);
-                break;
-            case 'plane':
-                mesh = Trees.plane(params.width || 4, params.height || 4, params.color, x, y, z);
-                break;
-            case 'pyramid':
-                mesh = Trees.pyramid(params.size || 2, params.height || 4, params.color, x, y, z);
-                break;
-            case 'tetrahedron':
-                mesh = Trees.tetrahedron(params.radius || 2, params.color, x, y, z);
-                break;
-            case 'octahedron':
-                mesh = Trees.octahedron(params.radius || 2, params.color, x, y, z);
-                break;
-            case 'dodecahedron':
-                mesh = Trees.dodecahedron(params.radius || 2, params.color, x, y, z);
-                break;
-            case 'icosahedron':
-                mesh = Trees.icosahedron(params.radius || 2, params.color, x, y, z);
-                break;
+        try {
+            let mesh;
+            const params = objData.params;
+            
+            // Get position - use 0 if not specified since relative positioning is handled separately
+            const x = params.x || 0;
+            const y = params.y || 0;
+            const z = params.z || 0;
+            
+            // Create mesh based on type
+            switch (objData.type) {
+                case 'sphere':
+                    mesh = Trees.sphere(params.radius || 2, params.color, x, y, z);
+                    break;
+                case 'cube':
+                    mesh = Trees.cube(params.width || 2, params.height || 2, params.depth || 2, params.color, x, y, z);
+                    break;
+                case 'cylinder':
+                    mesh = Trees.cylinder(params.radiusTop || 2, params.radiusBottom || 2, params.height || 4, params.color, x, y, z);
+                    break;
+                case 'cone':
+                    mesh = Trees.cone(params.radius || 2, params.height || 4, params.color, x, y, z);
+                    break;
+                case 'torus':
+                    mesh = Trees.torus(params.radius || 3, params.tube || 1, params.color, x, y, z);
+                    break;
+                case 'plane':
+                    mesh = Trees.plane(params.width || 4, params.height || 4, params.color, x, y, z);
+                    break;
+                case 'pyramid':
+                    mesh = Trees.pyramid(params.size || 2, params.height || 4, params.color, x, y, z);
+                    break;
+                case 'tetrahedron':
+                    mesh = Trees.tetrahedron(params.radius || 2, params.color, x, y, z);
+                    break;
+                case 'octahedron':
+                    mesh = Trees.octahedron(params.radius || 2, params.color, x, y, z);
+                    break;
+                case 'dodecahedron':
+                    mesh = Trees.dodecahedron(params.radius || 2, params.color, x, y, z);
+                    break;
+                case 'icosahedron':
+                    mesh = Trees.icosahedron(params.radius || 2, params.color, x, y, z);
+                    break;
             case 'lightSphere':
                 mesh = Trees.lightSphere(params.radius || 3, params.color, params.intensity || 1, x, y, z);
                 if (mesh.light) {
@@ -552,6 +680,10 @@ class App {
         }
         
         return mesh;
+        } catch (error) {
+            console.error(`Error creating mesh for type "${objData.type}":`, error);
+            return null;
+        }
     }
 
     displayObjectsList(objectsData) {
@@ -696,9 +828,14 @@ class App {
     }
 
     fitCameraToScene() {
-        if (this.currentObjects.length === 0) return;
+        // If no objects, use default view
+        if (this.currentObjects.length === 0) {
+            this.camera.position.set(0, 20, 40);
+            this.camera.lookAt(0, 0, 0);
+            return;
+        }
 
-        // Calculate bounding box
+        // Calculate bounding box of all rendered objects
         let minX = Infinity, maxX = -Infinity;
         let minY = Infinity, maxY = -Infinity;
         let minZ = Infinity, maxZ = -Infinity;
@@ -708,32 +845,63 @@ class App {
             const geometry = obj.geometry;
 
             if (geometry) {
-                geometry.computeBoundingBox();
-                const bbox = geometry.boundingBox;
-                
-                minX = Math.min(minX, pos.x - (bbox.max.x - bbox.min.x) / 2);
-                maxX = Math.max(maxX, pos.x + (bbox.max.x - bbox.min.x) / 2);
-                minY = Math.min(minY, pos.y - (bbox.max.y - bbox.min.y) / 2);
-                maxY = Math.max(maxY, pos.y + (bbox.max.y - bbox.min.y) / 2);
-                minZ = Math.min(minZ, pos.z - (bbox.max.z - bbox.min.z) / 2);
-                maxZ = Math.max(maxZ, pos.z + (bbox.max.z - bbox.min.z) / 2);
+                try {
+                    geometry.computeBoundingBox();
+                    const bbox = geometry.boundingBox;
+                    
+                    if (!bbox) continue;
+                    
+                    const dx = (bbox.max.x - bbox.min.x) / 2;
+                    const dy = (bbox.max.y - bbox.min.y) / 2;
+                    const dz = (bbox.max.z - bbox.min.z) / 2;
+                    
+                    minX = Math.min(minX, pos.x - dx);
+                    maxX = Math.max(maxX, pos.x + dx);
+                    minY = Math.min(minY, pos.y - dy);
+                    maxY = Math.max(maxY, pos.y + dy);
+                    minZ = Math.min(minZ, pos.z - dz);
+                    maxZ = Math.max(maxZ, pos.z + dz);
+                } catch (e) {
+                    // Skip objects with invalid geometry
+                    console.warn('Failed to compute bounding box for object:', e);
+                    continue;
+                }
+            } else {
+                // Handle objects without geometry (groups, etc)
+                minX = Math.min(minX, pos.x - 1);
+                maxX = Math.max(maxX, pos.x + 1);
+                minY = Math.min(minY, pos.y - 1);
+                maxY = Math.max(maxY, pos.y + 1);
+                minZ = Math.min(minZ, pos.z - 1);
+                maxZ = Math.max(maxZ, pos.z + 1);
             }
+        }
+
+        // Fallback if bounding box calculation failed
+        if (!isFinite(minX) || !isFinite(maxX) || !isFinite(minY) || !isFinite(maxY) || !isFinite(minZ) || !isFinite(maxZ)) {
+            console.warn('Could not calculate scene bounds, using default view');
+            this.camera.position.set(0, 20, 40);
+            this.camera.lookAt(0, 0, 0);
+            return;
         }
 
         const centerX = (minX + maxX) / 2;
         const centerY = (minY + maxY) / 2;
         const centerZ = (minZ + maxZ) / 2;
 
-        const distance = Math.max(
-            maxX - minX,
-            maxY - minY,
-            maxZ - minZ
-        ) * 1.5;
+        const sizeX = maxX - minX;
+        const sizeY = maxY - minY;
+        const sizeZ = maxZ - minZ;
+        
+        // Use the largest dimension, with minimum safety distance
+        const maxSize = Math.max(sizeX, sizeY, sizeZ, 1);
+        const distance = maxSize * 2;
 
+        // Position camera to view entire scene from a good angle
         this.camera.position.set(
-            centerX + distance,
-            centerY + distance * 0.5,
-            centerZ + distance
+            centerX + distance * 0.7,
+            centerY + distance * 0.6,
+            centerZ + distance * 0.7
         );
         this.camera.lookAt(centerX, centerY, centerZ);
     }

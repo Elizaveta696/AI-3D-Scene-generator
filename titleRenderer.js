@@ -31,7 +31,7 @@ class TitleRenderer {
             });
             this.renderer.setSize(width, height);
             this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            this.renderer.setClearColor(0x000000, 0);
+            this.renderer.setClearColor(0x000000, 0);  // Fully transparent
             
             this.setupLights();
             this.createTitle();
@@ -63,27 +63,39 @@ class TitleRenderer {
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.width = 2048;
-        canvas.height = 512;
+        canvas.height = 768;
         
-        // Grey background matching main scene
-        context.fillStyle = '#383838';
-        context.fillRect(0, 0, canvas.width, canvas.height);
+        // Fully transparent background
+        context.clearRect(0, 0, canvas.width, canvas.height);
         
-        // White text
-        context.fillStyle = '#ffffff';
-        context.font = 'bold 180px Poppins, -apple-system, BlinkMacSystemFont, sans-serif';
-        context.textAlign = 'center';
-        context.textBaseline = 'middle';
-        context.fillText('3D Scene Generator', canvas.width / 2, canvas.height / 2);
+        // Wait for Google Font to load then draw
+        document.fonts.ready.then(() => {
+            // Black text - two lines, Gravitas One font
+            context.fillStyle = '#000000';
+            context.font = 'bold 280px "Gravitas One"';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText('Scene', canvas.width / 2, canvas.height / 2 - 100);
+            context.fillText('Generator', canvas.width / 2, canvas.height / 2 + 100);
+            
+            // Update texture after font loads
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            if (this.titleMesh && this.titleMesh.material.map) {
+                this.titleMesh.material.map = texture;
+                this.titleMesh.material.needsUpdate = true;
+            }
+        });
         
         const texture = new THREE.CanvasTexture(canvas);
         texture.magFilter = THREE.LinearFilter;
         texture.minFilter = THREE.LinearFilter;
         
-        const geometry = new THREE.PlaneGeometry(6, 1.2);
+        const geometry = new THREE.PlaneGeometry(7, 2.1);
         const material = new THREE.MeshPhongMaterial({
             map: texture,
-            transparent: false,
+            transparent: true,
+            alphaTest: 0.001,
             side: THREE.DoubleSide,
             shininess: 0
         });
