@@ -1,6 +1,11 @@
 # AI 3D Scene Generator
 
+> ⚠️ **Project Status**: This project is **currently in active development**. Features, documentation, and functionality may change as development progresses.
+
 An innovative web application that uses AI to transform text descriptions into interactive 3D scenes!
+
+![alt text](image-1.png)
+![alt text](image.png)
 
 ## 🎨 Features
 
